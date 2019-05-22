@@ -20,6 +20,7 @@ class CLI(Enum):
     LABELS = 'path_labels'
     MODEL = 'model'
     SIGOPT_TOKEN = 'sigopt_token'
+    EXPERIMENT_ID = 'experiment_id'
 
 
 class Hyperparameters(Enum):
@@ -72,6 +73,8 @@ class StanfordCarsCLI(object):
                             help="whether or not to freeze weights on pretrained model")
         parser.add_argument("--" + CLI.SIGOPT_TOKEN.value, dest=CLI.SIGOPT_TOKEN.value, type=str,
                             help='sigopt api token', required=False)
+        parser.add_argument("--" + CLI.EXPERIMENT_ID.value, dest=CLI.EXPERIMENT_ID.value, type=int,
+                            help='sigopt experiment id', required=False)
 
         return parser
 
