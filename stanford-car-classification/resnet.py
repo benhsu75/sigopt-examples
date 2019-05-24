@@ -106,7 +106,7 @@ class PalmNet(object):
                 self.gd_optimizer.step()
         return loss, preds
 
-    def train_model(self, training_data, validation_data, number_of_labels):
+    def train_model(self, training_data, validation_data, number_of_labels, sigopt_conn, experiment_id, suggestion):
         """Defines training for tuning of pretrained model.
         Training_data and validation_data are both objects of type DataLoader."""
 
@@ -122,6 +122,9 @@ class PalmNet(object):
         logging.info("validation data label, percentage: %s", validation_data.dataset.get_class_distribution())
 
         validation_accuracy = 0.0
+
+        # Create Training Run
+        training_run = sigopt_conn.experiments(experiment_id).training_runs().create(suggestion=suggestion.id)
 
         for epoch in range(self.epochs):  # loop over the dataset multiple times
             logging.info("epoch number: %d", epoch)
@@ -212,6 +215,15 @@ class PalmNet(object):
                                                                                           validation_f1_score,
                                                                                           running_validation_loss / len(validation_data.dataset),
                                                                                           validation_accuracy))
+
+                # TM Report Checkpoint
+                checkpoint = sigopt_conn.experiments(experiment_id).training_runs(training_run.id).checkpoints().create(
+                    values=[{'name': 'Validation Accuracy', 'value': validation_accuracy}],
+                )
+
+                if checkpoint.to_json()['should_stop']:
+                    observation = sigopt_conn.experiments(experiment_id).observations().create(training_run=training_run.id)
+                    break
 
         # orchestrate hook to keep track of metric
         orchestrate.io.log_metric('accuracy', validation_accuracy)

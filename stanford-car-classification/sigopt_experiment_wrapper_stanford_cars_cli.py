@@ -8,7 +8,7 @@ import orchestrate.io
 import numpy as np
 import math
 from resnet_stanford_cars_cli import StanfordCarsCLI, Hyperparameters, CLI
-from sigopt import Connection
+from sigopt_python.sigopt import Connection
 
 
 class SigoptExperimentCLI(StanfordCarsCLI):
@@ -18,7 +18,7 @@ class SigoptExperimentCLI(StanfordCarsCLI):
     def load_datasets(self, parsed_cli_arguments):
         return super().load_datasets(parsed_cli_arguments)
 
-    def evaluate_model(self, sigopt_suggestion_arguments, assignments, training_data, validation_data):
+    def evaluate_model(self, sigopt_suggestion_arguments, assignments, training_data, validation_data, sigopt_conn, experiment_id, suggestion):
         logging.info("loading pretrained model and establishing model characteristics")
 
         resnet_pretrained_model = get_pretrained_resnet(sigopt_suggestion_arguments[CLI.FREEZE_WEIGHTS.value],
@@ -51,7 +51,10 @@ class SigoptExperimentCLI(StanfordCarsCLI):
                                                                                            batch_size=assignments[Hyperparameters.BATCH_SIZE.value],
                                                                                            shuffle=True),
                                                                 number_of_labels=sigopt_suggestion_arguments[
-                                                                    CLI.NUM_CLASSES.value])
+                                                                    CLI.NUM_CLASSES.value],
+                                                                sigopt_conn=sigopt_conn,
+                                                                experiment_id=experiment_id,
+                                                                suggestion=suggestion)
         return trained_model, validation_metric
 
     def run(self, sigopt_suggestion_arguments, training_data, validation_data):
@@ -157,10 +160,22 @@ class SigoptExperimentCLI(StanfordCarsCLI):
         #           type="double"
         #           )
         #         ],
-        #     metrics=[dict(name='accuracy')],
+        #     metrics=[dict(name='val_accuracy')],
         #     parallel_bandwidth=1,
         #     observation_budget=30,
         #     project="stanford-car-tm",
+        #     training_monitor=dict(
+        #         max_checkpoints=35,  # required, cannot exceed 200
+        #         early_stopping_criteria=[
+        #             dict(
+        #               type='convergence',  # Only permitted value during alpha testing
+        #               name='Look Back 4 Steps',
+        #               metric='val_accuracy',
+        #               lookback_checkpoints=2,
+        #               min_checkpoints=3,  # Minimum checkpoints before stopping criteria is considered
+        #             ),
+        #           ],
+        #     ),
         # )
 
         experiment = conn.experiments(sigopt_suggestion_arguments[CLI.EXPERIMENT_ID.value]).fetch()
@@ -170,11 +185,11 @@ class SigoptExperimentCLI(StanfordCarsCLI):
             print("Evaluating Model")
             suggestion = conn.experiments(experiment.id).suggestions().create()
             print(suggestion.assignments)
-            _, value = self.evaluate_model(sigopt_suggestion_arguments, suggestion.assignments, training_data, validation_data)
-            conn.experiments(experiment.id).observations().create(
-                suggestion=suggestion.id,
-                value=value,
-            )
+            _, value = self.evaluate_model(sigopt_suggestion_arguments, suggestion.assignments, training_data, validation_data, conn, experiment.id, suggestion)
+            # conn.experiments(experiment.id).observations().create(
+            #     suggestion=suggestion.id,
+            #     value=value,
+            # )
 
             # Update the experiment object
             experiment = conn.experiments(experiment.id).fetch()
