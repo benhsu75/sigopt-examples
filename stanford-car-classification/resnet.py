@@ -216,14 +216,14 @@ class PalmNet(object):
                                                                                           running_validation_loss / len(validation_data.dataset),
                                                                                           validation_accuracy))
 
-                # TM Report Checkpoint
-                checkpoint = sigopt_conn.experiments(experiment_id).training_runs(training_run.id).checkpoints().create(
-                    values=[{'name': 'val_accuracy', 'value': validation_accuracy}],
-                )
+            # TM Report Checkpoint
+            checkpoint = sigopt_conn.experiments(experiment_id).training_runs(training_run.id).checkpoints().create(
+                values=[{'name': 'val_accuracy', 'value': validation_accuracy}],
+            )
 
-                if checkpoint.to_json()['should_stop']:
-                    observation = sigopt_conn.experiments(experiment_id).observations().create(training_run=training_run.id)
-                    break
+            if checkpoint.to_json()['should_stop']:
+                observation = sigopt_conn.experiments(experiment_id).observations().create(training_run=training_run.id)
+                break
 
         # orchestrate hook to keep track of metric
         orchestrate.io.log_metric('accuracy', validation_accuracy)
