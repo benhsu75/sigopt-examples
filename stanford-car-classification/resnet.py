@@ -218,7 +218,7 @@ class PalmNet(object):
 
                 # TM Report Checkpoint
                 checkpoint = sigopt_conn.experiments(experiment_id).training_runs(training_run.id).checkpoints().create(
-                    values=[{'name': 'Validation Accuracy', 'value': validation_accuracy}],
+                    values=[{'name': 'val_accuracy', 'value': validation_accuracy}],
                 )
 
                 if checkpoint.to_json()['should_stop']:
