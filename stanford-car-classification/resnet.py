@@ -173,52 +173,58 @@ class PalmNet(object):
                 if epoch % self.model_checkpointing == 0 or epoch == self.epochs -1:
                     self.checkpoint_model(epoch, running_training_loss / len(training_data.dataset), epithet='')
 
-            if epoch % self.validation_frequency == 0 or epoch == self.epochs-1:
+            # if epoch % self.validation_frequency == 0 or epoch == self.epochs-1:
 
-                logging.info("validating model")
+            t0 = time.time()
 
-                self.model.eval()
+            logging.info("validating model")
 
-                running_validation_loss = 0.0
-                running_validation_correct_count = 0
+            self.model.eval()
 
-                all_validation_labels = []
-                all_validation_predictions = []
+            running_validation_loss = 0.0
+            running_validation_correct_count = 0
 
-                # run forward pass on validation dataset
-                for i, data in enumerate(validation_data):
-                    validation_input = data[StanfordCars.TRANSFORMED_IMAGE]
-                    validation_input = validation_input.to(device)
-                    validation_labels = data[StanfordCars.LABEL]
-                    validation_labels = validation_labels.to(device)
+            all_validation_labels = []
+            all_validation_predictions = []
 
-                    validation_loss, validation_predictions = self.training_pass(validation_input, validation_labels, False)
+            # run forward pass on validation dataset
+            for i, data in enumerate(validation_data):
+                validation_input = data[StanfordCars.TRANSFORMED_IMAGE]
+                validation_input = validation_input.to(device)
+                validation_labels = data[StanfordCars.LABEL]
+                validation_labels = validation_labels.to(device)
 
-                    all_validation_predictions.extend(validation_predictions.tolist())
-                    all_validation_labels.extend(validation_labels.tolist())
+                validation_loss, validation_predictions = self.training_pass(validation_input, validation_labels, False)
 
-                    validation_correct_counts = torch.sum(validation_predictions == validation_labels.data)
-                    running_validation_loss += validation_loss.item()
-                    running_validation_correct_count += validation_correct_counts
-                    logging.debug("fraction of validation data processed: %f", (float(i)/len(validation_data))*100)
-                    logging.debug("batch running validation loss: %f", running_validation_loss)
-                    logging.debug("batch running validation accuracy: %f", running_validation_correct_count.item())
+                all_validation_predictions.extend(validation_predictions.tolist())
+                all_validation_labels.extend(validation_labels.tolist())
 
-                cm = confusion_matrix(y_true=all_validation_labels, y_pred=all_validation_predictions, labels=list(range(number_of_labels)))
-                cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-                logging.info("confusion matrix:\n %s", cm)
+                validation_correct_counts = torch.sum(validation_predictions == validation_labels.data)
+                running_validation_loss += validation_loss.item()
+                running_validation_correct_count += validation_correct_counts
+                logging.debug("fraction of validation data processed: %f", (float(i)/len(validation_data))*100)
+                logging.debug("batch running validation loss: %f", running_validation_loss)
+                logging.debug("batch running validation accuracy: %f", running_validation_correct_count.item())
 
-                # Calculating loss over 1 epoch (all data)
-                validation_f1_score = f1_score(y_true=all_validation_labels, y_pred=all_validation_predictions, average='weighted')
-                validation_accuracy = (running_validation_correct_count.double() / len(validation_data.dataset)).item()
-                logging.info('Epoch: {} F1-Score: {:.4f}, Loss: {:.4f} Acc: {:.4f}'.format("validation",
-                                                                                          validation_f1_score,
-                                                                                          running_validation_loss / len(validation_data.dataset),
-                                                                                          validation_accuracy))
+            cm = confusion_matrix(y_true=all_validation_labels, y_pred=all_validation_predictions, labels=list(range(number_of_labels)))
+            cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+            logging.info("confusion matrix:\n %s", cm)
+
+            # Calculating loss over 1 epoch (all data)
+            validation_f1_score = f1_score(y_true=all_validation_labels, y_pred=all_validation_predictions, average='weighted')
+            validation_accuracy = (running_validation_correct_count.double() / len(validation_data.dataset)).item()
+            logging.info('Epoch: {} F1-Score: {:.4f}, Loss: {:.4f} Acc: {:.4f}'.format("validation",
+                                                                                      validation_f1_score,
+                                                                                      running_validation_loss / len(validation_data.dataset),
+                                                                                      validation_accuracy))
+
+            t1 = time.time()
+            val_time = t1 - t0
 
             # TM Report Checkpoint
             checkpoint = sigopt_conn.experiments(experiment_id).training_runs(training_run.id).checkpoints().create(
                 values=[{'name': 'val_accuracy', 'value': validation_accuracy}],
+                metadata={'val_time_sec': val_time},
             )
 
             if checkpoint.to_json()['should_stop']:
@@ -226,7 +232,7 @@ class PalmNet(object):
                 break
 
         # orchestrate hook to keep track of metric
-        orchestrate.io.log_metric('accuracy', validation_accuracy)
+        # orchestrate.io.log_metric('accuracy', validation_accuracy)
 
         logging.info('Finished Training')
 
